@@ -80,7 +80,7 @@ done
 #end raw]]></configfile>
   </configfiles>
   <inputs>
-    <param name="blastn_search_outputs" type="data" optional="false" label="blastn_search_outputs" help="" format="tabular" multiple="true"/>
+    <param name="blastn_search_outputs" type="data" optional="false" label="blastn_search_outputs" help="" format="tabular" multiple="false"/>
   </inputs>
   <outputs>
     <data name="summary_viruses_viroids" format="tabular" label="summary_viruses_viroids" hidden="false"/>
