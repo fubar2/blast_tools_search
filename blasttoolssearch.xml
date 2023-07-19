@@ -1,0 +1,107 @@
+<tool name="blasttoolssearch" id="blasttoolssearch" version="3.1">
+  <!--Source in git at: https://github.com/fubar2/galaxy-->
+  <!--Created by toolfactory@galaxy.org at 19/07/2023 12:39:19 using the Galaxy Tool Factory.-->
+  <description>Runs a legacy Java jar called blasttools from https://github.com/schmidda/blast-tools/tree/master</description>
+  <requirements>
+    <requirement type="package">csvtk</requirement>
+    <requirement type="package">openjdk</requirement>
+  </requirements>
+  <stdio>
+    <exit_code range="1:" level="fatal"/>
+  </stdio>
+  <version_command><![CDATA[echo "3.0"]]></version_command>
+  <command><![CDATA[
+mkdir -p files &&
+#for afile in $blastn_search_outputs:
+ln -sf '$afile' files/\$(basename '$afile') &&
+#end for
+bash $runme ./files $__tool_directory__/BlastTools.jar $summary_viruses_viroids
+]]></command>
+  <configfiles>
+    <configfile name="runme"><![CDATA[#raw
+
+
+## eResearch Office, QUT
+## Created:  31 March 2021
+## Last modified: 28 September 2022
+## Script: Processes Galaxy Australia generated blastN outputs to summarise and report hits to REGULATED and ENDEMIC viruses/viroids.
+## Usage: ./run_VirReport_Summary.sh
+## changed to accept a single input file name passed as $1
+## Ross Lazarus for a ToolFactory wrapper for Robert Barrero
+## July 18 2023
+
+dataPath=${PWD}
+
+# Requirement: One or more GA-VSD .tabular outputs need to be in the folder where the command above (Usage)is executed.
+# The script will Look for all files with the suffix *.tabular
+
+#Processing tabular files
+for file in files/*.*
+  do
+    var=$(basename $file)
+
+    #STEP0: fetch Top 1 Hits
+    cat $file | awk '{print $1}' | sort | uniq > ${var}.top1.ids
+    for i in `cat ${var}.top1.ids`
+      do
+        echo "fetching top hits..." $i;
+        grep $i $file | head -1 >> ${var}.top1Hits.txt;
+      done
+
+    #STEP1: modify the columns of Galaxy Australia (GA) blast output to the expected format by the BlastTools.jar tool
+    ######  namely: qseqid sgi sacc length pident mismatch gapopen qstart qend qlen sstart send slen sstrand evalue bitscore qcovhsp stitle staxids qseq sseq sseqid qcovs qframe sframe
+    cat ${var}.top1Hits.txt |csvtk cut -H -t -f 1,19,20,4,3,5,6,7,8,17,9,10,18,22,11,12,24,21,25,15,16,2,23,13,14 | sed 's/ /_/g' > ${var}.txt
+
+    #STEP2: summarise the GA blastN files
+    java -jar $2 -t blastn ${var}.txt
+    #filter virus/viroid/endo
+    cat summary_${var}.txt | grep "virus\|viroid\|endo" > summary_${var}_filtered.txt
+
+    #STEP3: fetch unique names from Blast summary reports
+    cat summary_${var}_filtered.txt | awk '{print $7}' | awk -F "|" '{print $2}'| sort | uniq | sed 's/Species://' > ${var}_uniq.ids
+
+    #STEP4: retrieve the best hit for each virus/viroid
+    echo "processing top hits ..."
+    touch ${var}_filtered.txt
+    for id in `cat ${var}_uniq.ids`
+      do
+        #print on the screen the name of the virus/viroids to search
+        #echo "fetching species matches ..." $id
+
+        #fetch the virus name on the summary_blastn file by selecting the longest alignment (column 3) and highest genome coverage (column 5)
+        grep $id summary_${var}.txt | sort -k3,3nr -k5,5nr | head -1 >> ${var}_filtered.txt
+      done
+
+    #print the header of the inital summary_blastn file
+    cat summary_${var}.txt | head -1 > header
+    #report 1
+    cat header ${var}_filtered.txt > $3
+done
+#end raw]]></configfile>
+  </configfiles>
+  <inputs>
+    <param name="blastn_search_outputs" type="data" optional="false" label="blastn_search_outputs" help="" format="tabular" multiple="true"/>
+  </inputs>
+  <outputs>
+    <data name="summary_viruses_viroids" format="tabular" label="summary_viruses_viroids" hidden="false"/>
+  </outputs>
+  <tests>
+    <test>
+      <output name="summary_viruses_viroids" value="summary_viruses_viroids_sample" compare="diff" lines_diff="0"/>
+      <param name="blastn_search_outputs" value="blastn_search_outputs_sample"/>
+    </test>
+  </tests>
+  <help><![CDATA[
+
+**What it Does**
+
+Wraps https://github.com/schmidda/blast-tools/tree/master as a Galaxy tool as a demonstration for Roberto Barrero
+
+
+
+]]></help>
+  <citations>
+    <citation type="doi">10.1093/bioinformatics/bts573</citation>
+  </citations>
+</tool>
+
